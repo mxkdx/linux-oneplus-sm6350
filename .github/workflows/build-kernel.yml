@@ -44,18 +44,14 @@ jobs:
           cd kernel_sm6350
           echo "KERNEL_DIR=$(pwd)" >> $GITHUB_ENV
 
-      - name: Download Clang prebuilt toolchain (clang-r498229 / 17.x)
+      - name: Download ProtonClang (Clang 17 for Kernel Building)
         run: |
           mkdir -p clang-prebuilt
           cd clang-prebuilt
-          git init -q
-          git remote add origin https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/
-          git config core.sparseCheckout true
-          echo "clang-r498229/*" >> .git/info/sparse-checkout
-          git pull --depth=1 origin main
-          ls clang-r498229/bin/ | head -20
-          ./clang-r498229/bin/clang --version
-          echo "CLANG_DIR=$(pwd)/clang-r498229" >> $GITHUB_ENV
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang-17
+          echo "---- ตรวจสอบ Clang binary ----"
+          ./clang-17/bin/clang --version
+          echo "CLANG_DIR=$(pwd)/clang-17" >> $GITHUB_ENV
 
       - name: Install SukiSU-Ultra
         working-directory: kernel_sm6350
@@ -63,7 +59,6 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s ${{ github.event.inputs.sukisu_tag }}
           echo "---- ตรวจสอบว่า SukiSU-Ultra ถูกฝังแล้ว ----"
           ls -la KernelSU/ 2>/dev/null || ls -la SukiSU/ 2>/dev/null || true
-          grep -ri "sukisu\|kernelsu" Makefile || true
 
       - name: Merge defconfig + device config fragment
         working-directory: kernel_sm6350
@@ -74,8 +69,6 @@ jobs:
             arch/arm64/configs/${{ github.event.inputs.defconfig }} \
             arch/arm64/configs/${{ github.event.inputs.device_config }}
           ls -la out/.config
-          echo "---- ตรวจสอบค่า config สำคัญ ----"
-          grep -E "CONFIG_KSU|CONFIG_KPROBES|CONFIG_FG_BQ27541|CONFIG_AW8697_HAPTIC|CONFIG_TOUCHPANEL_FOCAL_FT3518|CONFIG_ONEPLUS_FASTCHG" out/.config || true
 
       - name: Enable SukiSU-Ultra required configs (non-GKI)
         working-directory: kernel_sm6350
@@ -88,7 +81,7 @@ jobs:
           echo "CONFIG_KPM=y" >> out/.config
           echo "CONFIG_HAVE_KPROBES=y" >> out/.config
           echo "CONFIG_KPROBE_EVENTS=y" >> out/.config
-          PATH=$GITHUB_WORKSPACE/clang-prebuilt/clang-r498229/bin:$PATH \
+          PATH=$GITHUB_WORKSPACE/clang-prebuilt/clang-17/bin:$PATH \
           make -C $(pwd) O=out ARCH=arm64 \
             CC=clang CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
@@ -98,7 +91,7 @@ jobs:
       - name: Build kernel
         working-directory: kernel_sm6350
         run: |
-          export PATH=$GITHUB_WORKSPACE/clang-prebuilt/clang-r498229/bin:$PATH
+          export PATH=$GITHUB_WORKSPACE/clang-prebuilt/clang-17/bin:$PATH
           make -j$(nproc) O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
