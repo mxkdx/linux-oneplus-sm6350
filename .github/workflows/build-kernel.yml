@@ -1,4 +1,4 @@
-name: Build SM6350 Kernel with KernelSU
+name: Build SM6350 Kernel with SukiSU-Ultra
 
 on:
   workflow_dispatch:
@@ -11,6 +11,10 @@ on:
         description: 'Device-specific config fragment'
         required: false
         default: 'vendor/billie.config'
+      sukisu_tag:
+        description: 'SukiSU-Ultra version tag to install'
+        required: false
+        default: 'v3.2.0'
 
 jobs:
   build:
@@ -53,13 +57,13 @@ jobs:
           ./clang-r498229/bin/clang --version
           echo "CLANG_DIR=$(pwd)/clang-r498229" >> $GITHUB_ENV
 
-      - name: Install KernelSU v0.9.5
+      - name: Install SukiSU-Ultra
         working-directory: kernel_sm6350
         run: |
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-          echo "---- ตรวจสอบว่า KernelSU ถูกฝังแล้ว ----"
-          ls -la KernelSU/ || true
-          grep -r "KernelSU" Makefile || true
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s ${{ github.event.inputs.sukisu_tag }}
+          echo "---- ตรวจสอบว่า SukiSU-Ultra ถูกฝังแล้ว ----"
+          ls -la KernelSU/ 2>/dev/null || ls -la SukiSU/ 2>/dev/null || true
+          grep -ri "sukisu\|kernelsu" Makefile || true
 
       - name: Merge defconfig + device config fragment
         working-directory: kernel_sm6350
@@ -73,12 +77,17 @@ jobs:
           echo "---- ตรวจสอบค่า config สำคัญ ----"
           grep -E "CONFIG_KSU|CONFIG_KPROBES|CONFIG_FG_BQ27541|CONFIG_AW8697_HAPTIC|CONFIG_TOUCHPANEL_FOCAL_FT3518|CONFIG_ONEPLUS_FASTCHG" out/.config || true
 
-      - name: Enable KernelSU config explicitly
+      - name: Enable SukiSU-Ultra required configs (non-GKI)
         working-directory: kernel_sm6350
         run: |
           export ARCH=arm64
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KPROBES=y" >> out/.config
+          echo "CONFIG_KALLSYMS=y" >> out/.config
+          echo "CONFIG_KALLSYMS_ALL=y" >> out/.config
+          echo "CONFIG_KPM=y" >> out/.config
+          echo "CONFIG_HAVE_KPROBES=y" >> out/.config
+          echo "CONFIG_KPROBE_EVENTS=y" >> out/.config
           PATH=$GITHUB_WORKSPACE/clang-prebuilt/clang-r498229/bin:$PATH \
           make -C $(pwd) O=out ARCH=arm64 \
             CC=clang CLANG_TRIPLE=aarch64-linux-gnu- \
